@@ -80,15 +80,15 @@ export default function Navbar() {
   const [activeDropdown, setActiveDropdown] = useState<string | null>(null);
   const [mobileSubmenu, setMobileSubmenu] = useState<string | null>(null);
   const location = useLocation();
-  const { user, role, isAdmin, isStaff, department, kiaCode } = useAuth();
+  const { user, role, isAdmin, isStaff, department, kiaCode, logout } = useAuth();
   
   const { data: headerContent } = useCMS('header', DEFAULT_HEADER);
   const { data: navbarContent } = useCMS('navbar', DEFAULT_NAVBAR);
   
   const navLinks = navbarContent?.navLinks || DEFAULT_NAVBAR.navLinks;
 
-  const handleLogout = () => {
-    signOut(auth);
+  const handleLogout = async () => {
+    await logout();
   };
 
   useEffect(() => {

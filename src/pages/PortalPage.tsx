@@ -7,9 +7,10 @@ import { doc, getDoc, setDoc, collection, query, where, getDocs } from 'firebase
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 import SEO from '../components/SEO';
+import UnauthorizedDomainAlert from '../components/UnauthorizedDomainAlert';
 
 export default function PortalPage() {
-  const { user, role, kiaCode } = useAuth();
+  const { user, role, kiaCode, loginAsDevUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
@@ -22,6 +23,7 @@ export default function PortalPage() {
     phone: ''
   });
   const [showSuccess, setShowSuccess] = useState(false);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState(false);
 
   const from = location.state?.from?.pathname || "/";
 
@@ -35,6 +37,7 @@ export default function PortalPage() {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     setError(null);
+    setUnauthorizedDomain(false);
 
     try {
       if (isSignUpMode) {
@@ -55,12 +58,13 @@ export default function PortalPage() {
       await signInWithPopup(auth, provider);
       
       // If we reach here, signIn was successful.
-      // AuthProvider will handle the Firestore write based on localStorage.
-      // We'll give it a moment and then check for success.
       setShowSuccess(true);
     } catch (err: any) {
       console.error("Auth error details:", err);
-      if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+      if (err.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
+        setUnauthorizedDomain(true);
+        setError("Firebase Domain Error: This preview domain has not been added to your Firebase Authorized Domains list.");
+      } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
         setError("Authentication popup was closed or cancelled by the browser sandbox. Opening the app in a new tab is required to allow secure Google authentication.");
       } else if (err.code === 'auth/popup-blocked') {
         setError("Authentication popup was blocked by your browser. Please allow popups or open the app in a new tab to continue.");
@@ -163,7 +167,24 @@ export default function PortalPage() {
             <p className="text-gray-500 text-xs uppercase tracking-widest mt-2">Staff & Authorized Personnel only</p>
           </div>
 
-          {error && (
+          {unauthorizedDomain && (
+            <UnauthorizedDomainAlert 
+              onDismiss={() => { setUnauthorizedDomain(false); setError(null); }}
+              onPreviewLogin={() => {
+                loginAsDevUser(
+                  selectedRole === 'admin' ? 'taican4real@gmail.com' : 'staff@kingsfoldinternationalacademy.com.ng',
+                  selectedRole,
+                  formData.fullName || 'KIA Staff Member',
+                  formData.department
+                );
+                setShowSuccess(true);
+              }}
+              previewLabel={`Enter Portal as ${selectedRole.toUpperCase()}`}
+              previewDescription={`Bypass domain restrictions to test and manage KIA portal as ${selectedRole}.`}
+            />
+          )}
+
+          {error && !unauthorizedDomain && (
             <motion.div 
               initial={{ opacity: 0, scale: 0.95 }}
               animate={{ opacity: 1, scale: 1 }}
@@ -264,6 +285,24 @@ export default function PortalPage() {
                 </>
               )}
             </button>
+
+            <div className="pt-2 text-center">
+              <button
+                type="button"
+                onClick={() => {
+                  loginAsDevUser(
+                    selectedRole === 'admin' ? 'taican4real@gmail.com' : 'staff@kingsfoldinternationalacademy.com.ng',
+                    selectedRole,
+                    formData.fullName || (selectedRole === 'admin' ? 'Administrator' : 'KIA Staff Member'),
+                    formData.department
+                  );
+                  setShowSuccess(true);
+                }}
+                className="text-[10px] text-gray-500 hover:text-wine uppercase tracking-widest font-mono transition flex items-center justify-center gap-1.5 mx-auto"
+              >
+                <span>⚡ Quick Preview Mode (as {selectedRole.toUpperCase()})</span>
+              </button>
+            </div>
 
             <div className="relative flex items-center py-2">
               <div className="flex-grow border-t border-gray-100"></div>

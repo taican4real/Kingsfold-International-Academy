@@ -76,6 +76,8 @@ interface AuthContextType {
   isStaff: boolean;
   department: string | null;
   kiaCode: string | null;
+  loginAsDevUser: (email: string, role: string, fullName?: string, dept?: string) => void;
+  logout: () => Promise<void>;
 }
 
 const AuthContext = createContext<AuthContextType>({
@@ -86,6 +88,8 @@ const AuthContext = createContext<AuthContextType>({
   isStaff: false,
   department: null,
   kiaCode: null,
+  loginAsDevUser: () => {},
+  logout: async () => {},
 });
 
 export const useAuth = () => useContext(AuthContext);
@@ -207,14 +211,70 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
           setRole(null);
         }
       } else {
-        setRole(null);
-        setKIACode(null);
+        // No Firebase auth user. Check if a local preview/dev session exists
+        const storedDev = localStorage.getItem('kia_dev_user');
+        if (storedDev) {
+          try {
+            const parsed = JSON.parse(storedDev);
+            setUser(parsed);
+            const storedRole = localStorage.getItem('kia_dev_role') || (parsed.email === 'taican4real@gmail.com' ? 'admin' : 'student');
+            setRole(storedRole);
+            setDepartment(localStorage.getItem('kia_dev_dept') || null);
+            setKIACode(localStorage.getItem('kia_dev_kia_code') || (storedRole === 'admin' ? null : 'KIA-810-061'));
+          } catch (e) {
+            localStorage.removeItem('kia_dev_user');
+            setUser(null);
+            setRole(null);
+            setKIACode(null);
+          }
+        } else {
+          setUser(null);
+          setRole(null);
+          setKIACode(null);
+        }
       }
       setLoading(false);
     });
 
     return unsubscribe;
   }, []);
+
+  const loginAsDevUser = (email: string, targetRole: string, fullName?: string, dept?: string) => {
+    const devCode = targetRole === 'admin' ? null : (localStorage.getItem('kia_dev_kia_code') || generateKIACode());
+    const mockUser: any = {
+      uid: 'dev_' + btoa(email || 'demo@kia.edu.ng').replace(/[^a-zA-Z0-9]/g, '').slice(0, 16),
+      email: email || 'demo@kia.edu.ng',
+      displayName: fullName || (targetRole === 'admin' ? 'Administrator' : 'KIA Staff'),
+      emailVerified: true,
+      isAnonymous: false,
+    };
+    
+    localStorage.setItem('kia_dev_user', JSON.stringify(mockUser));
+    localStorage.setItem('kia_dev_role', targetRole);
+    if (dept) localStorage.setItem('kia_dev_dept', dept);
+    if (devCode) localStorage.setItem('kia_dev_kia_code', devCode);
+    if (fullName) localStorage.setItem('kia_dev_full_name', fullName);
+
+    setUser(mockUser);
+    setRole(targetRole);
+    setDepartment(dept || null);
+    setKIACode(devCode);
+  };
+
+  const logout = async () => {
+    localStorage.removeItem('kia_dev_user');
+    localStorage.removeItem('kia_dev_role');
+    localStorage.removeItem('kia_dev_dept');
+    localStorage.removeItem('kia_dev_kia_code');
+    localStorage.removeItem('kia_dev_full_name');
+    localStorage.removeItem('dev_force_role');
+    localStorage.removeItem('dev_force_dept');
+    await signOut(auth).catch(() => {});
+    setUser(null);
+    setRole(null);
+    setDepartment(null);
+    setKIACode(null);
+  };
 
   const value = {
     user,
@@ -224,6 +284,8 @@ export const AuthProvider: React.FC<{ children: React.ReactNode }> = ({ children
     isStaff: ['admin', 'staff', 'hod', 'teacher'].includes(role || '') || user?.email === 'taican4real@gmail.com',
     department,
     kiaCode,
+    loginAsDevUser,
+    logout,
   };
 
   return (

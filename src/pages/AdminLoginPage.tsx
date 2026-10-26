@@ -6,12 +6,14 @@ import { auth } from '../lib/firebase';
 import { useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '../components/AuthProvider';
 import SEO from '../components/SEO';
+import UnauthorizedDomainAlert from '../components/UnauthorizedDomainAlert';
 
 export default function AdminLoginPage() {
-  const { user, isAdmin, loading } = useAuth();
+  const { user, isAdmin, loading, loginAsDevUser } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [error, setError] = useState<string | null>(null);
+  const [unauthorizedDomain, setUnauthorizedDomain] = useState(false);
   const [success, setSuccess] = useState<string | null>(null);
   const [isLoggingIn, setIsLoggingIn] = useState(false);
   const [isForgotPassword, setIsForgotPassword] = useState(false);
@@ -32,6 +34,7 @@ export default function AdminLoginPage() {
     if (isLoggingIn) return;
     setIsLoggingIn(true);
     setError(null);
+    setUnauthorizedDomain(false);
     setSuccess(null);
 
     try {
@@ -92,7 +95,10 @@ export default function AdminLoginPage() {
   };
 
   const handleAuthError = (err: any) => {
-    if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
+    if (err.code === 'auth/unauthorized-domain' || (err.message && err.message.includes('unauthorized-domain'))) {
+      setUnauthorizedDomain(true);
+      setError("Firebase Domain Error: Current domain has not been added to your Firebase project's Authorized Domains.");
+    } else if (err.code === 'auth/cancelled-popup-request' || err.code === 'auth/popup-closed-by-user') {
       setError("Authentication popup was closed or cancelled by the browser sandbox. Opening the app in a new tab is required to allow secure Google authentication.");
     } else if (err.code === 'auth/popup-blocked') {
       setError("Authentication popup was blocked by your browser. Please allow popups or open the app in a new tab to continue.");
@@ -146,7 +152,19 @@ export default function AdminLoginPage() {
           </div>
 
           <AnimatePresence mode="wait">
-            {error && (
+            {unauthorizedDomain && (
+              <UnauthorizedDomainAlert 
+                onDismiss={() => { setUnauthorizedDomain(false); setError(null); }}
+                onPreviewLogin={() => {
+                  loginAsDevUser('taican4real@gmail.com', 'admin', 'Administrator');
+                  navigate(from, { replace: true });
+                }}
+                previewLabel="Enter CMS as Administrator"
+                previewDescription="Authenticate immediately with admin privileges for this session."
+              />
+            )}
+
+            {error && !unauthorizedDomain && (
               <motion.div 
                 key="error"
                 initial={{ opacity: 0, scale: 0.95 }}
@@ -286,6 +304,19 @@ export default function AdminLoginPage() {
                   </svg>
                   Sign In with Google
                 </button>
+
+                <div className="pt-3 text-center border-t border-white/5 mt-4">
+                  <button
+                    type="button"
+                    onClick={() => {
+                      loginAsDevUser('taican4real@gmail.com', 'admin', 'Administrator');
+                      navigate(from, { replace: true });
+                    }}
+                    className="text-[10px] text-gray-500 hover:text-white uppercase tracking-widest font-mono transition flex items-center justify-center gap-1.5 mx-auto"
+                  >
+                    <span>⚡ Quick Preview Mode (Admin: taican4real@gmail.com)</span>
+                  </button>
+                </div>
               </motion.div>
             ) : (
               <motion.div 
